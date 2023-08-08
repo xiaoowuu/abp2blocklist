@@ -23,33 +23,52 @@ let { Filter } = require("./adblockpluscore/lib/filterClasses");
 let { ContentBlockerList } = require("./lib/abp2blocklist.js");
 let inputFile = process.argv[2];
 let outputFile = process.argv[3];
-var rl = readline.createInterface({ input: fs.createReadStream(inputFile), terminal: false });
-var blockerList = new ContentBlockerList({ merge: "all" });
-console.log('readInputFile');
-rl.on("line", line => {
-  if (/^\s*[^\[\s]/.test(line))
-    blockerList.addFilter(Filter.fromText(Filter.normalize(line)));
-});
-rl.on("close", () => {
-  console.log('generateRules begin');
-  blockerList.generateRules().then(rules => {
-    // If the rule set is too huge, JSON.stringify throws
-    // "RangeError: Invalid string length" on Node.js. As a workaround, print
-    // each rule individually.
-    console.log('generateRules end');
-    let content = '';
-    content += "[";
-    if (rules.length > 0) {
-      let stringifyRule = rule => JSON.stringify(rule, null, "\t");
-      for (let i = 0; i < rules.length - 1; i++)
-        content += stringifyRule(rules[i]) + ",";
-      content += stringifyRule(rules[rules.length - 1]);
-    }
-    content += "]";
-    console.log('createWriteStream');
-    fs.createWriteStream(outputFile).write(content, ((res) => {
-      console.log(res);
-    }));
-    console.log('complete');
+function exportContentBlocker() {
+  var rl = readline.createInterface({ input: fs.createReadStream(inputFile), terminal: false });
+  var blockerList = new ContentBlockerList({ merge: "all" });
+  console.log('readInputFile');
+  rl.on("line", line => {
+    if (/^\s*[^\[\s]/.test(line))
+      blockerList.addFilter(Filter.fromText(Filter.normalize(line)));
+  });
+  rl.on("close", () => {
+    console.log('generateRules begin');
+    blockerList.generateRules().then(rules => {
+      // If the rule set is too huge, JSON.stringify throws
+      // "RangeError: Invalid string length" on Node.js. As a workaround, print
+      // each rule individually.
+      console.log('generateRules end');
+      let content = '';
+      content += "[";
+      if (rules.length > 0) {
+        let stringifyRule = rule => JSON.stringify(rule, null, "\t");
+        for (let i = 0; i < rules.length - 1; i++)
+          content += stringifyRule(rules[i]) + ",";
+        content += stringifyRule(rules[rules.length - 1]);
+      }
+      content += "]";
+      console.log('createWriteStream');
+      fs.createWriteStream(outputFile).write(content, ((res) => {
+        console.log(res);
+      }));
+      console.log('complete');
+    });
+  });
+}
+let http = require('https');
+const fileUrl = 'https://easylist-downloads.adblockplus.org/easylistchina+easylist.txt';
+console.log(`开始下载：${fileUrl}`);
+const request = http.get(fileUrl, (response) => {
+  const fileStream = fs.createWriteStream(inputFile);
+  response.pipe(fileStream);
+  fileStream.on('finish', () => {
+    console.log('下载成功');
+    exportContentBlocker();
+  }).on('error', (err) => {
+    console.error(`写入文件出错: ${err.message}`);
   });
 });
+request.on('error', (err) => {
+  console.error(`请求下载文件出错: ${err.message}`);
+});
+request.end();
